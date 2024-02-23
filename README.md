@@ -19,6 +19,10 @@ Before you begin, ensure you have the following installed:
 - [Node.js](https://nodejs.org/)
 - [npm](https://www.npmjs.com/) (comes with Node.js)
 - [SQLite](https://www.sqlite.org/)
+- [Python 3.7 or later](https://www.python.org/downloads/)
+- [Microsoft Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+
+Python and Microsoft Visual Studio Build Tools are required to build brain.js.
 
 ### Installation
 
