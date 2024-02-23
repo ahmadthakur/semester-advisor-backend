@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "brain.js": "^2.0.0-beta.23",
+    "constraintjs": "^0.9.8-beta3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "express": "^4.18.2",

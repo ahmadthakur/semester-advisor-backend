@@ -12,21 +12,31 @@ const rawData = JSON.parse(fs.readFileSync("training_data.json", "utf8"));
 // Generate normalized training data
 const trainingData = rawData.map((item) => ({
   input: {
-    ProgrammingFundamentals: normalize(item.input.ProgrammingFundamentals),
     IntroductionToComputing: normalize(item.input.IntroductionToComputing),
-    Calculus1: normalize(item.input.Calculus1),
+    EnglishComprehension: normalize(item.input.EnglishComprehension),
+    CalculusAndAnalyticalGeometry: normalize(
+      item.input.CalculusAndAnalyticalGeometry
+    ),
+    Physics: normalize(item.input.Physics),
+    Economics: normalize(item.input.Economics),
+    IntroductionToBusiness: normalize(item.input.IntroductionToBusiness),
+    GeneralMathematics: normalize(item.input.GeneralMathematics),
+    PakistanStudies: normalize(item.input.PakistanStudies),
+    IntroductionToELearning: normalize(item.input.IntroductionToELearning),
   },
   output: {
-    WebDevelopment: normalize(item.output.WebDevelopment),
-    MobileAppDevelopment: normalize(item.output.MobileAppDevelopment),
-    SoftwareEngineering: normalize(item.output.SoftwareEngineering),
-    DatabaseManagement: normalize(item.output.DatabaseManagement),
-    OperatingSystems: normalize(item.output.OperatingSystems),
-    ComputerNetworks: normalize(item.output.ComputerNetworks),
-    ArtificialIntelligence: normalize(item.output.ArtificialIntelligence),
-    MachineLearning: normalize(item.output.MachineLearning),
-    DataStructures: normalize(item.output.DataStructures),
-    Algorithms: normalize(item.output.Algorithms),
+    ...item.output.semester2.reduce(
+      (obj, course) => ({ ...obj, [course]: 1 }),
+      {}
+    ),
+    ...item.output.semester3.reduce(
+      (obj, course) => ({ ...obj, [course]: 1 }),
+      {}
+    ),
+    ...item.output.semester4.reduce(
+      (obj, course) => ({ ...obj, [course]: 1 }),
+      {}
+    ),
   },
 }));
 

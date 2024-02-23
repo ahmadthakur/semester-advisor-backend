@@ -6,6 +6,16 @@ const fs = require("fs");
 // Create a new SQLite database in memory
 const db = new sqlite3.Database("./students.db");
 
+// Normalize a score between 0 and 1
+function normalize(score) {
+  return (score - 50) / 50;
+}
+
+// Load the model from the JSON file
+const json = JSON.parse(fs.readFileSync("model.json", "utf8"));
+const net = new brain.NeuralNetwork();
+net.fromJSON(json);
+
 // User registration endpoint
 exports.register = (req, res) => {
   // Extract the data from the request body
@@ -181,15 +191,27 @@ exports.grades = (req, res) => {
     return res.status(401).json({ error: "User not logged in" });
   }
 
-  const { ProgrammingFundamentals, IntroductionToComputing, Calculus1 } =
-    req.body;
+  const {
+    IntroductionToComputing,
+    IntroductionToProgramming,
+    EnglishComprehension,
+    CalculusAndAnalyticalGeometry,
+    Physics,
+  } = req.body;
 
   db.run(
     `
-        INSERT INTO grades (student_id, ProgrammingFundamentals, IntroductionToComputing, Calculus1)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO grades (student_id, IntroductionToComputing, IntroductionToProgramming, EnglishComprehension, CalculusAndAnalyticalGeometry, Physics)
+        VALUES (?, ?, ?, ?, ?, ?)
     `,
-    [userId, ProgrammingFundamentals, IntroductionToComputing, Calculus1],
+    [
+      userId,
+      IntroductionToComputing,
+      IntroductionToProgramming,
+      EnglishComprehension,
+      CalculusAndAnalyticalGeometry,
+      Physics,
+    ],
     (err) => {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -207,21 +229,58 @@ exports.updateGrades = (req, res) => {
     return res.status(401).json({ error: "User not logged in" });
   }
 
-  const { ProgrammingFundamentals, IntroductionToComputing, Calculus1 } =
-    req.body;
+  const {
+    IntroductionToComputing,
+    IntroductionToProgramming,
+    EnglishComprehension,
+    CalculusAndAnalyticalGeometry,
+    Physics,
+  } = req.body;
 
-  db.run(
-    `
-        UPDATE grades SET ProgrammingFundamentals = ?, IntroductionToComputing = ?, Calculus1 = ? WHERE student_id = ?
-    `,
-    [ProgrammingFundamentals, IntroductionToComputing, Calculus1, userId],
-    (err) => {
+  const fieldsToUpdate = [];
+  const values = [];
+
+  if (IntroductionToComputing) {
+    fieldsToUpdate.push("IntroductionToComputing = ?");
+    values.push(IntroductionToComputing);
+  }
+
+  if (IntroductionToProgramming) {
+    fieldsToUpdate.push("IntroductionToProgramming = ?");
+    values.push(IntroductionToProgramming);
+  }
+
+  if (EnglishComprehension) {
+    fieldsToUpdate.push("EnglishComprehension = ?");
+    values.push(EnglishComprehension);
+  }
+
+  if (CalculusAndAnalyticalGeometry) {
+    fieldsToUpdate.push("CalculusAndAnalyticalGeometry = ?");
+    values.push(CalculusAndAnalyticalGeometry);
+  }
+
+  if (Physics) {
+    fieldsToUpdate.push("Physics = ?");
+    values.push(Physics);
+  }
+
+  values.push(userId);
+
+  if (fieldsToUpdate.length > 0) {
+    const sql = `UPDATE grades SET ${fieldsToUpdate.join(
+      ", "
+    )} WHERE student_id = ?`;
+
+    db.run(sql, values, (err) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
       res.json({ message: "Grades updated successfully!" });
-    }
-  );
+    });
+  } else {
+    res.json({ message: "No fields to update!" });
+  }
 };
 
 // View grades endpoint
@@ -259,42 +318,79 @@ exports.recommendCourses = (req, res) => {
       return res.status(404).json({ error: "Grades not found" });
     }
 
-    const json = JSON.parse(fs.readFileSync("model.json", "utf8"));
-    const net = new brain.NeuralNetwork();
-    net.fromJSON(json);
-
-    // Denormalize a score from 0-1 to 50-100
-    function denormalize(score) {
-      return score * 50 + 50;
-    }
-
-    // Normalize a score between 0 and 1
-    function normalize(score) {
-      return (score - 50) / 50;
-    }
-
     const student = {
-      ProgrammingFundamentals: normalize(user.ProgrammingFundamentals),
       IntroductionToComputing: normalize(user.IntroductionToComputing),
-      Calculus1: normalize(user.Calculus1),
+      IntroductionToProgramming: normalize(user.IntroductionToProgramming),
+      EnglishComprehension: normalize(user.EnglishComprehension),
+      CalculusAndAnalyticalGeometry: normalize(
+        user.CalculusAndAnalyticalGeometry
+      ),
+      Physics: normalize(user.Physics),
     };
 
     const scores = net.run(student);
 
-    // Denormalize the scores
-    const denormalizedScores = {};
-    for (let course in scores) {
-      denormalizedScores[course] = denormalize(scores[course]);
+    console.log(scores);
+
+    // Extract the courses for each semester
+    const semesters = {
+      semester2: [],
+      semester3: [],
+      semester4: [],
+    };
+
+    // Determine failed courses
+    const failedCourses = [];
+    for (let course in user) {
+      if (user[course] < 50) {
+        failedCourses.push(course);
+      }
     }
 
-    // Convert the scores to an array of [course, score] pairs
-    const courses = Object.entries(denormalizedScores);
+    // Add failed courses to the next semester
+    semesters.semester2.push(...failedCourses);
 
-    // Sort the courses by score in descending order
-    courses.sort((a, b) => b[1] - a[1]);
+    // Get the remaining courses
+    const remainingCourses = Object.keys(scores).filter(
+      (course) => !failedCourses.includes(course)
+    );
 
-    // Send the top 3 courses
-    res.json(courses.slice(0, 3));
+    // Combine failed and remaining courses
+    const allCourses = [...failedCourses, ...remainingCourses];
+
+    // Prerequisite mapping
+    const prerequisites = {
+      BusinessAndTechnicalEnglishWriting: "EnglishComprehension",
+      DiscreteMathematics: "CalculusAndAnalyticalGeometry",
+      LinearAlgebra: "CalculusAndAnalyticalGeometry",
+      DataStructures: "IntroductionToProgramming",
+      ObjectOrientedProgramming: "IntroductionToProgramming",
+      DataCommunication: "IntroductionToComputing",
+      DatabaseManagementSystems: "IntroductionToProgramming",
+      SoftwareEngineeringI: "IntroductionToProgramming",
+      OperatingSystems: "DataStructures",
+      ComputerNetworks: "DataCommunication",
+    };
+
+    // Check if a failed course is a prerequisite for any other course
+    for (let course of failedCourses) {
+      const futureCourses = Object.keys(prerequisites).filter(
+        (key) => prerequisites[key] === course
+      );
+      for (let futureCourse of futureCourses) {
+        const index = allCourses.indexOf(futureCourse);
+        if (index !== -1) {
+          allCourses.splice(index, 1);
+          allCourses.push(futureCourse);
+        }
+      }
+    }
+
+    semesters.semester2 = allCourses.slice(0, 6);
+    semesters.semester3 = allCourses.slice(6, 12);
+    semesters.semester4 = allCourses.slice(12, 18);
+
+    res.json(semesters);
   });
 };
 

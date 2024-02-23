@@ -6,6 +6,7 @@ const FileStore = require("session-file-store")(session);
 const cookieParser = require("cookie-parser");
 const userRouter = require("./routes/userRouter");
 const cors = require("cors");
+const cjs = require("constraintjs");
 
 // Denormalize a score from 0-1 to 50-100
 function denormalize(score) {
@@ -59,32 +60,68 @@ app.use("/user", userRouter);
 // Define a POST endpoint for making predictions
 app.post("/predict", (req, res) => {
   const student = {
-    ProgrammingFundamentals: normalize(req.body.ProgrammingFundamentals),
     IntroductionToComputing: normalize(req.body.IntroductionToComputing),
-    Calculus1: normalize(req.body.Calculus1),
+    IntroductionToProgramming: normalize(req.body.IntroductionToProgramming),
+    EnglishComprehension: normalize(req.body.EnglishComprehension),
+    CalculusAndAnalyticalGeometry: normalize(
+      req.body.CalculusAndAnalyticalGeometry
+    ),
+    Physics: normalize(req.body.Physics),
+
+    GeneralMathematics: normalize(req.body.GeneralMathematics),
+    // PakistanStudies: normalize(req.body.PakistanStudies),
+    // IntroductionToELearning: normalize(req.body.IntroductionToELearning),
+    // Economics: normalize(req.body.Economics),
+    // IntroductionToBusiness: normalize(req.body.IntroductionToBusiness),
   };
 
   const scores = net.run(student);
 
-  // Denormalize the scores
-  const denormalizedScores = {};
-  for (let course in scores) {
-    denormalizedScores[course] = denormalize(scores[course]);
+  console.log(scores);
+
+  // Extract the courses for each semester
+  const semesters = {
+    semester2: [],
+    semester3: [],
+    semester4: [],
+  };
+
+  // Determine failed courses
+  const failedCourses = [];
+  for (let course in req.body) {
+    if (req.body[course] < 50) {
+      failedCourses.push(course);
+    }
   }
 
-  // Convert the scores to an array of [course, score] pairs
-  const courses = Object.entries(denormalizedScores);
+  // Add failed courses to the next semester
+  semesters.semester2.push(...failedCourses);
 
-  // Sort the courses by score in descending order
-  courses.sort((a, b) => b[1] - a[1]);
+  // Get the remaining courses
+  const remainingCourses = Object.keys(scores).filter(
+    (course) => !failedCourses.includes(course)
+  );
 
-  // Select the three courses with the highest scores
-  const recommendations = courses.slice(0, 3).map((course) => course[0]);
+  // Combine failed and remaining courses
+  const allCourses = [...failedCourses, ...remainingCourses];
 
-  // Send the recommendations as the response
-  res.json(recommendations);
+  // Divide the remaining courses into thirds
+  // const third = Math.ceil(remainingCourses.length / 3);
+  // const remainingCourses1 = remainingCourses.slice(0, third);
+  // const remainingCourses2 = remainingCourses.slice(third, 2 * third);
+  // const remainingCourses3 = remainingCourses.slice(2 * third);
+
+  // Distribute the remaining courses across the semesters
+  // semesters.semester2.push(...remainingCourses1);
+  // semesters.semester3.push(...remainingCourses2);
+  // semesters.semester4.push(...remainingCourses3);
+
+  semesters.semester2 = allCourses.slice(0, 6);
+  semesters.semester3 = allCourses.slice(6, 12);
+  semesters.semester4 = allCourses.slice(12, 18);
+
+  res.json(semesters);
 });
-
 // Start the server
 const port = process.env.PORT || 4000;
 app.listen(port, () => console.log(`Server running on port ${port}`));
