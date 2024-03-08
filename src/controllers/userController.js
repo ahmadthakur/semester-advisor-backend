@@ -100,6 +100,11 @@ exports.login = (req, res) => {
           }
           res.json({
             message: "User logged in successfully!",
+            user: {
+              id: user.id,
+              username: user.username,
+              // Include any other user-specific data you need
+            },
           });
         });
       } else {
@@ -396,11 +401,17 @@ exports.recommendCourses = (req, res) => {
 
 // Check session endpoint
 exports.checkSession = (req, res) => {
-  const userId = req.session.userId;
+  const user = req.session.user;
 
-  if (!userId) {
-    return res.json({ isLoggedIn: false });
+  if (!user) {
+    return res.json({ user: null });
   }
 
-  return res.json({ isLoggedIn: true });
+  return res.json({
+    user: {
+      id: user.id,
+      username: user.username,
+      // Include any other user-specific data you need
+    },
+  });
 };
