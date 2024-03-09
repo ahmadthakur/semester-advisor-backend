@@ -2,6 +2,8 @@ const sqlite3 = require("sqlite3").verbose();
 const { v4: uuidv4 } = require("uuid");
 const brain = require("brain.js");
 const fs = require("fs");
+const bcrypt = require("bcrypt");
+saltRounds = 10;
 
 // Create a new SQLite database in memory
 const db = new sqlite3.Database("./students.db");
@@ -21,56 +23,63 @@ exports.register = (req, res) => {
   // Extract the data from the request body
   const { username, password, fullName, email } = req.body;
 
-  // If username or email already exists, send an error otherwise create a new user
-
-  db.get(
-    `
-        SELECT * FROM students WHERE username = ? OR email = ?
-    `,
-    [username, email],
-    (err, user) => {
-      if (err) {
-        res.status(400).json({ error: err.message });
-        return;
-      }
-
-      if (user) {
-        res.status(400).json({ error: "Username or email already exists" });
-        return;
-      } else {
-        // Create a new user
-        const user = {
-          username,
-          password,
-          fullName,
-          email,
-        };
-
-        const id = uuidv4();
-
-        // Save the user in the database
-        db.run(
-          `
-              INSERT INTO students (id, username, password, full_name, email)
-              VALUES (?, ?, ?, ?, ?)
-          `,
-          [id, user.username, user.password, user.fullName, user.email],
-          (err) => {
-            if (err) {
-              // If there's an error, it most likely means the username already exists
-              res.status(400).json({ error: err.message });
-              return;
-            }
-
-            // Send a success message
-            res.json({
-              message: "User registered successfully!",
-            });
-          }
-        );
-      }
+  // Hash the password
+  bcrypt.hash(password, saltRounds, (err, hashedPassword) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
     }
-  );
+
+    // If username or email already exists, send an error otherwise create a new user
+    db.get(
+      `
+          SELECT * FROM students WHERE username = ? OR email = ?
+      `,
+      [username, email],
+      (err, user) => {
+        if (err) {
+          res.status(400).json({ error: err.message });
+          return;
+        }
+
+        if (user) {
+          res.status(400).json({ error: "Username or email already exists" });
+          return;
+        } else {
+          // Create a new user
+          const user = {
+            username,
+            password: hashedPassword,
+            fullName,
+            email,
+          };
+
+          const id = uuidv4();
+
+          // Save the user in the database
+          db.run(
+            `
+                INSERT INTO students (id, username, password, full_name, email)
+                VALUES (?, ?, ?, ?, ?)
+            `,
+            [id, user.username, user.password, user.fullName, user.email],
+            (err) => {
+              if (err) {
+                // If there's an error, it most likely means the username already exists
+                res.status(400).json({ error: err.message });
+                return;
+              }
+
+              // Send a success message
+              res.json({
+                message: "User registered successfully!",
+              });
+            }
+          );
+        }
+      }
+    );
+  });
 };
 
 // User login endpoint
@@ -81,9 +90,9 @@ exports.login = (req, res) => {
   // Find the user in the database
   db.get(
     `
-        SELECT * FROM students WHERE username = ? AND password = ?
+        SELECT * FROM students WHERE username = ?
     `,
-    [username, password],
+    [username],
     (err, user) => {
       if (err) {
         res.status(400).json({ error: err.message });
@@ -91,23 +100,37 @@ exports.login = (req, res) => {
       }
 
       if (user) {
-        // Send a success message
-        req.session.userId = user.id;
-        req.session.save((err) => {
+        // Compare the hashed password with the provided password
+        bcrypt.compare(password, user.password, (err, result) => {
           if (err) {
             res.status(500).json({ error: err.message });
             return;
           }
-          res.json({
-            message: "User logged in successfully!",
-            user: {
-              id: user.id,
-              username: user.username,
-              // Include any other user-specific data you need
-            },
-          });
+
+          if (result) {
+            // Passwords match, send a success message
+            req.session.userId = user.id;
+            req.session.save((err) => {
+              if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+              }
+              res.json({
+                message: "User logged in successfully!",
+                user: {
+                  id: user.id,
+                  username: user.username,
+                  // Include any other user-specific data you need
+                },
+              });
+            });
+          } else {
+            // Passwords don't match
+            res.status(401).json({ error: "Incorrect username or password" });
+          }
         });
       } else {
+        // User not found
         res.status(401).json({ error: "Incorrect username or password" });
       }
     }
